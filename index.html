@@ -1,0 +1,642 @@
+
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#153e75">
+<link rel="manifest" href="manifest.webmanifest">
+<title>FST Connect</title>
+<style>
+:root {
+  --bleu: #153e75;
+  --bleu-clair: #eaf2ff;
+  --fond: #f4f7fb;
+  --vert: #18794e;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font-family: Arial, sans-serif;
+  background: var(--fond);
+  color: #202938;
+}
+header {
+  background: var(--bleu);
+  color: white;
+  padding: 24px 5%;
+}
+header h1 { margin: 0 0 8px; }
+header p { margin: 0; }
+nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 14px 5%;
+  background: white;
+  border-bottom: 1px solid #ddd;
+}
+button, select, input, textarea {
+  font: inherit;
+  padding: 10px;
+  border: 1px solid #ccd4df;
+  border-radius: 7px;
+}
+button {
+  cursor: pointer;
+  background: white;
+  color: var(--bleu);
+}
+button:hover { background: var(--bleu-clair); }
+nav button.active, .primary {
+  background: var(--bleu);
+  color: white;
+}
+main {
+  max-width: 1100px;
+  margin: 24px auto;
+  padding: 0 16px;
+}
+.card {
+  background: white;
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 16px;
+  box-shadow: 0 2px 8px #1020400d;
+}
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 14px;
+}
+.tile {
+  border: 1px solid #dce4ef;
+  background: white;
+  border-radius: 10px;
+  padding: 18px;
+  text-align: left;
+}
+.tile strong { display: block; margin-bottom: 8px; }
+label { display: block; margin: 12px 0 5px; }
+input, select, textarea { width: 100%; }
+form button { margin-top: 12px; }
+.notice {
+  border-left: 4px solid var(--bleu);
+  background: var(--bleu-clair);
+  padding: 12px;
+  margin: 10px 0;
+  border-radius: 5px;
+}
+.small { color: #5c6677; font-size: 14px; }
+footer {
+  padding: 24px;
+  text-align: center;
+  color: #5c6677;
+}
+table { width: 100%; border-collapse: collapse; }
+th, td {
+  text-align: left;
+  padding: 10px;
+  border-bottom: 1px solid #ddd;
+}
+.table-wrap { overflow-x: auto; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>FST CONNECT</h1>
+  <p>Faculté des Sciences et Techniques</p>
+  <p>Votre portail d'informations universitaires</p>
+</header>
+
+<nav id="menu">
+  <button data-page="accueil" class="active">Accueil</button>
+  <button data-page="parcours">Parcours</button>
+  <button data-page="infos">Informations</button>
+  <button data-page="admin">Administration</button>
+</nav>
+
+<main id="app"></main>
+
+<footer>
+  FST Connect — Prototype connecté en lecture seule (2026)
+  <p>Projet indépendant, non officiel. Données fictives.</p>
+</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+// CONFIGURATION : remplace ces deux valeurs par celles de TON projet Supabase.
+// Utilise uniquement l’URL du projet et la clé publique sb_publishable_....
+// Ne mets JAMAIS une clé service_role ou secret dans ce fichier.
+const SUPABASE_URL = "https://ggdajvfwesypzvbbwedl.supabase.co";
+const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_WG5OxjIRkProYgjA5bnoow_5zwfm3Uz";
+let clientSupabase = null;
+let etatConnexion = "Supabase n’est pas encore configuré.";
+try {
+  if (SUPABASE_URL.startsWith("https://") &&
+      !SUPABASE_URL.includes("COLLE_ICI") &&
+      SUPABASE_PUBLISHABLE_KEY.startsWith("sb_publishable_")) {
+    clientSupabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
+    etatConnexion = "Connexion à Supabase en cours…";
+  }
+} catch (erreur) {
+  etatConnexion = "Impossible de préparer la connexion Supabase.";
+}
+
+let disciplines = [
+  "Mathématiques", "Physique", "Biologie", "Chimie",
+  "Géologie", "QHSE", "Informatique", "Autres parcours"
+];
+
+let niveaux = ["L1", "L2", "L3", "M1", "M2", "Doctorat"];
+let emploisDuTemps = [];
+let specialites = [];
+let etudiantsSupabase = [];
+let specialiteChoisie = "";
+
+const etudiants = [];
+
+let parcoursChoisi = "Mathématiques";
+let niveauChoisi = "L1";
+
+const annoncesInitiales = [
+  {
+    titre:"Bienvenue sur FST Connect",
+    texte:"Ce site de démonstration présente le projet de portail universitaire.",
+    date:"2026-10-19",
+    cible:"Tous"
+  },
+  {
+    titre:"Exemple d'emploi du temps",
+    texte:"Les horaires affichés dans ce prototype sont fictifs.",
+    date:"2026-10-19",
+    cible:"L1"
+  }
+];
+
+let annonces = annoncesInitiales;
+
+try {
+  const sauvegarde = localStorage.getItem("fst_annonces");
+
+  if (sauvegarde !== null) {
+    const donnees = JSON.parse(sauvegarde);
+
+    if (Array.isArray(donnees)) {
+      annonces = donnees;
+    }
+  }
+} catch (erreur) {
+  console.log("Lecture des annonces impossible.");
+}
+
+let page = "accueil";
+
+
+const CLE_CACHE_FST = "fst_cache_donnees_v1";
+
+function chargerCacheLocal() {
+  try {
+    const brut = localStorage.getItem(CLE_CACHE_FST);
+    if (!brut) return false;
+    const cache = JSON.parse(brut);
+    if (!cache || typeof cache !== "object") return false;
+    if (Array.isArray(cache.disciplines) && cache.disciplines.length) disciplines = cache.disciplines;
+    if (Array.isArray(cache.niveaux) && cache.niveaux.length) niveaux = cache.niveaux;
+    if (Array.isArray(cache.annonces)) annonces = cache.annonces;
+    if (Array.isArray(cache.emploisDuTemps)) emploisDuTemps = cache.emploisDuTemps;
+    if (Array.isArray(cache.specialites)) specialites = cache.specialites;
+    if (Array.isArray(cache.etudiantsSupabase)) etudiantsSupabase = cache.etudiantsSupabase;
+    etatConnexion = "Hors ligne : affichage des dernières données enregistrées sur cet appareil. Les nouveautés d'autres appareils ne sont pas disponibles sans Internet.";
+    return true;
+  } catch (erreur) {
+    console.warn("Le cache local n'a pas pu être lu.", erreur);
+    return false;
+  }
+}
+
+function enregistrerCacheLocal() {
+  try {
+    localStorage.setItem(CLE_CACHE_FST, JSON.stringify({
+      disciplines, niveaux, annonces, emploisDuTemps, specialites, etudiantsSupabase,
+      enregistreLe: new Date().toISOString()
+    }));
+  } catch (erreur) {
+    console.warn("Le cache local n'a pas pu être enregistré.", erreur);
+  }
+}
+
+async function chargerDepuisSupabase() {
+  if (!clientSupabase) {
+    if (!chargerCacheLocal()) {
+      etatConnexion = "Hors ligne : connecte-toi une première fois à Internet pour charger les données de FST Connect.";
+    }
+    afficher();
+    return;
+  }
+
+  try {
+    const [discResult, niveauxResult, annoncesResult, horairesResult, specialitesResult, etudiantsResult] = await Promise.all([
+      clientSupabase
+        .from("disciplines")
+        .select("nom")
+        .eq("actif", true)
+        .order("nom"),
+
+  clientSupabase
+    .from("niveaux")
+    .select("nom, ordre")
+    .order("ordre"),
+
+  clientSupabase
+    .from("annonces")
+    .select("titre, contenu, public_cible, date_publication")
+    .eq("statut", "published")
+    .not("date_publication", "is", null)
+    .lte("date_publication", new Date().toISOString())
+    .order("date_publication", { ascending: false }),
+
+  clientSupabase
+    .from("emplois_du_temps")
+    .select(
+      "discipline, niveau, jour, ordre_jour, heure_debut, heure_fin, activite, salle"
+    )
+    .eq("actif", true)
+    .order("ordre_jour")
+    .order("heure_debut"),
+
+  clientSupabase
+    .from("specialites")
+    .select("discipline, niveau, nom")
+    .eq("actif", true)
+    .order("nom"),
+
+  clientSupabase
+    .from("etudiants")
+    .select("discipline, niveau, specialite, nom")
+    .eq("actif", true)
+    .order("nom")
+]);
+
+if (discResult.error) {
+  throw new Error("Disciplines : " + discResult.error.message);
+}
+
+if (niveauxResult.error) {
+  throw new Error("Niveaux : " + niveauxResult.error.message);
+}
+
+if (annoncesResult.error) {
+  throw new Error("Annonces : " + annoncesResult.error.message);
+}
+
+if (horairesResult.error) {
+  throw new Error("Emplois du temps : " + horairesResult.error.message);
+}
+if (specialitesResult.error) {
+  throw new Error("Spécialités : " + specialitesResult.error.message);
+}
+if (etudiantsResult.error) {
+  throw new Error("Étudiants : " + etudiantsResult.error.message);
+}
+
+    if (Array.isArray(discResult.data) && discResult.data.length) {
+      disciplines = discResult.data.map(x => x.nom);
+      if (!disciplines.includes(parcoursChoisi)) parcoursChoisi = disciplines[0];
+    }
+    if (Array.isArray(niveauxResult.data) && niveauxResult.data.length) {
+      niveaux = niveauxResult.data.map(x => x.nom);
+      if (!niveaux.includes(niveauChoisi)) niveauChoisi = niveaux[0];
+    }
+
+    annonces = (annoncesResult.data || []).map(a => ({
+      titre: a.titre,
+      texte: a.contenu,
+      date: a.date_publication ? a.date_publication.slice(0, 10) : "",
+      cible: a.public_cible || "Tous"
+    }));
+    
+    emploisDuTemps = horairesResult.data || [];
+    specialites = specialitesResult.data || [];
+    etudiantsSupabase = etudiantsResult.data || [];
+    etatConnexion = "Connecté à Supabase : données actualisées et enregistrées sur cet appareil pour une consultation hors ligne.";
+    enregistrerCacheLocal();
+    afficher();
+  } catch (erreur) {
+    console.error("Erreur Supabase :", erreur);
+    const cacheDisponible = chargerCacheLocal();
+    if (!cacheDisponible) {
+      etatConnexion = navigator.onLine
+        ? "La lecture Supabase a échoué. Vérifie l’URL, la clé publique et les autorisations RLS."
+        : "Hors ligne : connecte-toi une première fois à Internet pour enregistrer les données sur cet appareil.";
+    }
+    afficher();
+  }
+}
+
+function afficherAnnonces() {
+  return annonces.map(a => `
+    <article class="notice">
+      <strong>${echapper(a.titre)}</strong>
+      <p>${echapper(a.texte)}</p>
+      <small>${echapper(a.date)} · ${echapper(a.cible)}</small>
+    </article>
+  `).join("");
+}
+
+function echapper(valeur) {
+  return String(valeur).replace(/[&<>"']/g, c => ({
+    "&":"&amp;", "<":"&lt;", ">":"&gt;",
+    '"':"&quot;", "'":"&#39;"
+  }[c]));
+}
+
+function afficherAccueil() {
+  return `
+    <section class="card">
+      <h2>Bienvenue sur FST Connect</h2>
+      <p>Un espace pour consulter les informations
+      pédagogiques et administratives de la FST.</p>
+      <p class="small">Version de démonstration. Les informations officielles devront être validées par la FST.</p>
+      <p id="etat-supabase" class="notice" role="status">${echapper(etatConnexion)}</p>
+      <button class="primary" onclick="aller('parcours')">
+        Consulter les parcours
+      </button>
+    </section>
+
+    <h2>Nos disciplines</h2>
+    <section class="grid">
+      ${disciplines.map(d => `
+        <button class="tile" onclick="choisirParcours('${echapper(d)}')">
+          <strong>${echapper(d)}</strong>
+          <span class="small">Licence · Master · Doctorat</span>
+        </button>
+      `).join("")}
+    </section>
+
+    <section class="card" style="margin-top:20px">
+      <h2>Dernières informations</h2>
+      ${afficherAnnonces()}
+    </section>
+  `;
+}
+
+function afficherParcours() {
+  return `
+    <section class="card">
+      <h2>Consulter un parcours</h2>
+
+      <label for="discipline">Discipline</label>
+      <select id="discipline" onchange="changerParcours(this.value)">
+        ${disciplines.map(d => `
+          <option ${d===parcoursChoisi?"selected":""}>
+            ${echapper(d)}
+          </option>
+        `).join("")}
+      </select>
+
+      <label for="niveau">Niveau</label>
+      <select id="niveau" onchange="changerNiveau(this.value)">
+        ${niveaux.map(n => `
+          <option ${n===niveauChoisi?"selected":""}>
+            ${n}
+          </option>
+        `).join("")}
+      </select>
+
+      ${["L3", "M1", "M2"].includes(niveauChoisi) ? `
+        <label for="specialite">Spécialité</label>
+        <select id="specialite" onchange="changerSpecialite(this.value)">
+          <option value="">-- Choisir une spécialité --</option>
+          ${specialites.filter(s => s.discipline === parcoursChoisi && s.niveau === niveauChoisi).map(s => `<option value="${echapper(s.nom)}" ${s.nom === specialiteChoisie ? "selected" : ""}>${echapper(s.nom)}</option>`).join("")}
+        </select>
+      ` : ""}
+
+      <label for="recherche">Rechercher un étudiant fictif</label>
+      <input id="recherche" placeholder="Nom de l’étudiant"
+        oninput="chercherEtudiants(this.value)">
+
+      <div id="contenu-parcours">
+        ${contenuParcours()}
+      </div>
+    </section>
+  `;
+}
+
+function contenuParcours() {
+  const utiliseSpecialite = ["L3", "M1", "M2"].includes(niveauChoisi);
+  const liste = etudiantsSupabase.filter(e =>
+    e.discipline === parcoursChoisi &&
+    e.niveau === niveauChoisi &&
+    (utiliseSpecialite ? e.specialite === specialiteChoisie : !e.specialite)
+  );
+
+  return `
+    <h3>${echapper(parcoursChoisi)} — ${echapper(niveauChoisi)}${specialiteChoisie ? " — " + echapper(specialiteChoisie) : ""}</h3>
+    ${utiliseSpecialite && !specialiteChoisie ? "<p class=\"notice\">Choisis une spécialité pour afficher les étudiants de cette option.</p>" : ""}
+
+    <h4>Emploi du temps</h4>
+
+<div class="table-wrap">
+  <table>
+    <thead>
+      <tr>
+        <th>Jour</th>
+        <th>Horaire</th>
+        <th>Activité</th>
+        <th>Salle</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${
+        emploisDuTemps
+          .filter(h =>
+            h.discipline === parcoursChoisi &&
+            h.niveau === niveauChoisi &&
+            (!utiliseSpecialite || !h.specialite || h.specialite === specialiteChoisie)
+          )
+          .map(h => `
+            <tr>
+              <td>${echapper(h.jour)}</td>
+              <td>${echapper(String(h.heure_debut).slice(0, 5))}
+                - ${echapper(String(h.heure_fin).slice(0, 5))}
+              </td>
+              <td>${echapper(h.activite)}</td>
+              <td>${echapper(h.salle || "Non précisée")}</td>
+            </tr>
+          `)
+          .join("")
+        || '<tr><td colspan="4">Aucun horaire enregistré pour ce parcours.</td></tr>'
+      }
+    </tbody>
+  </table>
+</div>
+
+    <h4>Liste de démonstration</h4>
+    <p class="small">Ces noms sont fictifs et ne constituent pas une liste officielle d’inscription.</p>
+    <div id="liste-etudiants">
+      ${liste.length ? liste.map(e => `
+        <p>${echapper(e.nom)} — ${echapper(e.niveau)}</p>
+      `).join("") : "<p>Aucun exemple pour ce niveau.</p>"}
+    </div>
+
+    <h4>Informations du parcours</h4>
+    <p>Les programmes, spécialités, cours et documents
+    seront ajoutés après validation du projet.</p>
+  `;
+}
+
+function afficherInfos() {
+  return `
+    <section class="card">
+      <h2>Informations générales</h2>
+      <p>Consultez ici les annonces et communiqués de démonstration.</p>
+      ${afficherAnnonces()}
+    </section>
+  `;
+}
+
+function afficherAdmin() {
+  return `
+    <section class="card">
+      <h2>Administration — Démonstration</h2>
+      <p class="small">Cette page n’est PAS protégée par un compte. Le formulaire reste local et ne publie pas dans Supabase. N’ajoute aucune donnée réelle ou confidentielle.</p>
+
+      <form onsubmit="ajouterAnnonce(event)">
+        <label for="titre">Titre de l'annonce</label>
+        <input id="titre" required maxlength="120">
+
+        <label for="texte">Message</label>
+        <textarea id="texte" required maxlength="2000"></textarea>
+
+        <label for="cible">Public concerné</label>
+        <select id="cible">
+          <option>Tous</option>
+          ${niveaux.map(n => `<option>${n}</option>`).join("")}
+        </select>
+
+        <button class="primary" type="submit">
+          Ajouter l'annonce
+        </button>
+      </form>
+
+      <h3>Annonces affichées (les ajouts de démonstration restent sur cet appareil)</h3>
+      <div id="annonces-admin">${afficherAnnonces()}</div>
+    </section>
+  `;
+}
+
+function aller(nouvellePage) {
+  page = nouvellePage;
+  document.querySelectorAll("#menu button").forEach(b => {
+    b.classList.toggle("active", b.dataset.page === page);
+  });
+  afficher();
+}
+
+function choisirParcours(nom) {
+  parcoursChoisi = nom;
+  aller("parcours");
+}
+
+function changerParcours(valeur) {
+  parcoursChoisi = valeur;
+  specialiteChoisie = "";
+  document.getElementById("contenu-parcours").innerHTML = contenuParcours();
+  afficher();
+}
+
+function changerNiveau(valeur) {
+  niveauChoisi = valeur;
+  specialiteChoisie = "";
+  afficher();
+}
+
+function changerSpecialite(valeur) {
+  specialiteChoisie = valeur;
+  document.getElementById("contenu-parcours").innerHTML = contenuParcours();
+  const selectSpecialite = document.getElementById("specialite");
+  if (selectSpecialite) selectSpecialite.value = valeur;
+}
+
+function chercherEtudiants(terme) {
+  const cible = document.getElementById("liste-etudiants");
+  const utiliseSpecialite = ["L3", "M1", "M2"].includes(niveauChoisi);
+  const liste = etudiantsSupabase.filter(e =>
+    e.discipline === parcoursChoisi &&
+    e.niveau === niveauChoisi &&
+    (utiliseSpecialite ? e.specialite === specialiteChoisie : !e.specialite) &&
+    e.nom.toLowerCase().includes(terme.toLowerCase())
+  );
+
+  cible.innerHTML = liste.length
+    ? liste.map(e => `<p>${echapper(e.nom)}</p>`).join("")
+    : "<p>Aucun exemple correspondant.</p>";
+}
+
+function ajouterAnnonce(event) {
+  event.preventDefault();
+
+  const titre = document.getElementById("titre").value.trim();
+  const texte = document.getElementById("texte").value.trim();
+  const cible = document.getElementById("cible").value;
+
+  if (!titre || !texte) {
+    alert("Remplis tous les champs.");
+    return;
+  }
+
+  annonces.unshift({
+    titre: titre,
+    texte: texte,
+    date: new Date().toISOString().slice(0, 10),
+    cible: cible
+  });
+
+  try {
+    localStorage.setItem(
+      "fst_annonces",
+      JSON.stringify(annonces)
+    );
+  } catch (erreur) {
+    alert("La sauvegarde a échoué.");
+    return;
+  }
+
+  afficher();
+}
+
+function afficher() {
+  const app = document.getElementById("app");
+
+  if (page === "accueil") app.innerHTML = afficherAccueil();
+  if (page === "parcours") app.innerHTML = afficherParcours();
+  if (page === "infos") app.innerHTML = afficherInfos();
+  if (page === "admin") app.innerHTML = afficherAdmin();
+}
+
+document.querySelectorAll("#menu button").forEach(b => {
+  b.addEventListener("click", () => aller(b.dataset.page));
+});
+
+afficher();
+chargerCacheLocal();
+chargerDepuisSupabase();
+
+// Le service worker fonctionne uniquement sur une adresse HTTPS (ou localhost).
+if ("serviceWorker" in navigator && location.protocol !== "file:") {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("./sw.js").catch(erreur => {
+      console.warn("Le mode hors ligne du site n'a pas pu être activé.", erreur);
+    });
+  });
+}
+
+window.addEventListener("online", () => chargerDepuisSupabase());
+window.addEventListener("offline", () => {
+  if (chargerCacheLocal()) afficher();
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,11 @@
+{
+  "name": "FST Connect",
+  "short_name": "FST Connect",
+  "description": "Portail d'informations universitaires de la Faculté des Sciences et Techniques",
+  "lang": "fr",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f4f7fb",
+  "theme_color": "#153e75"
+}
